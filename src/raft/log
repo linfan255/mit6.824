@@ -1,0 +1,224 @@
+Test (2A): election after network failure ...
+peer 0 detectHeartBeat timeout[578] seed[1576055100071765793]
+peer 1 detectHeartBeat timeout[643] seed[1576055100072024575]
+peer 2 detectHeartBeat timeout[624] seed[1576055100074998498]
+[detectHeartBeat term 0 state 1]:peer 0 convert to Candidate after timeout
+term[0]: peer[0] start election
+term[0]: peer[0] vote for self
+[onElection term 1 state 2]: 0 send ReuqestVote to 1
+[AppendEntries term 0 state 1]:peer 1 convert to follower, args.term[1]
+[RequestVote term 0 state 1]:peer 1 convert to Candidate after granting vote to 0
+[onElection term 1 state 2]: 0 send ReuqestVote to 2
+[detectHeartBeat term 0 state 2]:peer 1 break detectHeartBeat because not a follower
+term[1]: peer[1] start election
+term[1]: peer[0] become leader
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[AppendEntries term 0 state 1]:peer 2 convert to follower, args.term[1]
+[RequestVote term 0 state 1]:peer 2 convert to Candidate after granting vote to 0
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[detectHeartBeat term 0 state 2]:peer 2 break detectHeartBeat because not a follower
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[RequestVote term 1 state 0]:peer 0 received requestVote from 1, but not vote.
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[RequestVote term 1 state 0]:peer 0 received requestVote from 2, but not vote.
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+case0 passed
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(1) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[1] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[onElection term 1 state 2]: peer(2) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(1) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[1] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[onElection term 1 state 2]: peer(2) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer 2 send RequestVote RPC to 0 failed
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(2) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[onElection term 1 state 2]: peer(1) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[1] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(1) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[1] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[onElection term 1 state 2]: peer(2) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(1) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[1] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[onElection term 1 state 2]: peer(2) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer 2 send RequestVote RPC to 0 failed
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(2) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(1) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[1] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer 1 send RequestVote RPC to 0 failed
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(2) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[onElection term 1 state 2]: peer 2 send RequestVote RPC to 0 failed
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(1) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[1] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer 2 send RequestVote RPC to 0 failed
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(2) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[2] start election
+[onElection term 1 state 2]: 2 send ReuqestVote to 0
+[onElection term 1 state 2]: 2 send ReuqestVote to 1
+[RequestVote term 1 state 2]:peer 1 received requestVote from 2, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[onElection term 1 state 2]: peer(1) election timeout, votedNum(0), peersNum/2(1)
+term[1]: peer[1] start election
+[onElection term 1 state 2]: 1 send ReuqestVote to 0
+[onElection term 1 state 2]: 1 send ReuqestVote to 2
+[RequestVote term 1 state 2]:peer 2 received requestVote from 1, but not vote.
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[onElection term 1 state 2]: peer 1 send RequestVote RPC to 0 failed
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(2)
+[sendHeartBeat term 1 state 0]: leader(0) send heartbeat to peer(1)
+--- FAIL: TestReElection2A (5.90s)
+	config.go:326: expected one leader, got none
+FAIL
+exit status 1
+FAIL	raft	5.902s
