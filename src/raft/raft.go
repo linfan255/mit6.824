@@ -169,16 +169,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 
 	rf.lastRcvMs = time.Now().UnixNano() / 1e6
-	/*
-		fmt.Printf("[AppendEntries term %d state %d]: peer %d received heartbeat from %d\n",
-			rf.currentTerm, rf.currentState, rf.me, args.LeaderId)
-	*/
 
 	if args.Term >= rf.currentTerm {
-		/*
-			fmt.Printf("[AppendEntries term %d state %d]:peer %d ccconvert to follower, args.term[%d], leader[%d]\n",
-				rf.currentTerm, rf.currentState, rf.me, args.Term, args.LeaderId)
-		*/
 		rf.currentState = Follower
 		if args.Term > rf.currentTerm {
 			rf.currentTerm = args.Term
@@ -238,10 +230,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		return
 	}
 	if args.Term > rf.currentTerm {
-		/*
-			fmt.Printf("[RequestVote term %d state %d]:peer %d convert to follower, args.term[%d] args.Candidate[%d]\n",
-				rf.currentTerm, rf.currentState, rf.me, args.Term, args.CandidateId)
-		*/
 		rf.currentTerm = args.Term
 		rf.votedFor = nil
 		rf.currentState = Follower
@@ -252,10 +240,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = true
 
 		rf.votedFor = args.CandidateId
-		/*
-			fmt.Printf("[RequestVote term %d state %d]:peer %d convert to Candidate after granting vote to %d\n",
-				rf.currentTerm, rf.currentState, rf.me, args.CandidateId)
-		*/
 		rf.currentState = Candidate
 		rf.lastRcvMs = time.Now().UnixNano() / 1e6
 	}
@@ -369,11 +353,7 @@ func (rf *Raft) detectHeartBeat() {
 	seedNum := time.Now().UnixNano()
 	rand.Seed(seedNum)
 	timeout := rand.Int()%150 + 500 // timeout is a random number bettween 500~650
-	// fmt.Printf("peer %d detectHeartBeat timeout[%d] seed[%d]\n", rf.me, timeout, seedNum)
 
-	// rf.mu.Lock()
-	// currentTerm := rf.currentTerm
-	// rf.mu.Unlock()
 	for {
 		rf.mu.Lock()
 		lastRcvMs := rf.lastRcvMs
@@ -381,33 +361,23 @@ func (rf *Raft) detectHeartBeat() {
 		rf.mu.Unlock()
 
 		if currentState != Follower {
-			/*
-				fmt.Printf("[detectHeartBeat term %d state %d]:peer %d break detectHeartBeat because not a follower\n",
-					currentTerm, currentState, rf.me)
-			*/
 			break
 		}
 
 		nowMs := time.Now().UnixNano() / 1e6
 		if nowMs-lastRcvMs > int64(timeout) {
 			rf.mu.Lock()
-			/*
-				fmt.Printf("[detectHeartBeat term %d state %d]:peer %d convert to Candidate after timeout\n",
-					rf.currentTerm, currentState, rf.me)
-			*/
 			rf.currentState = Candidate
 			rf.votedFor = nil
 			rf.mu.Unlock()
 			break
 		}
-		// time.Sleep(time.Duration(50) * time.Millisecond)
 	}
 }
 
 func (rf *Raft) sendHeartBeat(peersId int) {
 	rf.mu.Lock()
 	currentTerm := rf.currentTerm
-	// currentState := rf.currentState
 	rf.mu.Unlock()
 
 	args := &AppendEntriesArgs{}
@@ -416,15 +386,9 @@ func (rf *Raft) sendHeartBeat(peersId int) {
 
 	reply := &AppendEntriesReply{}
 
-	// fmt.Printf("[sendHeartBeat term %d state %d]: leader(%d) send heartbeat to peer(%d)\n",
-	// currentTerm, currentState, rf.me, peersId)
 	ok := rf.peers[peersId].Call("Raft.AppendEntries", args, reply)
 	if ok && reply.Term > currentTerm {
 		rf.mu.Lock()
-		/*
-			fmt.Printf("[sendHeartBeat term %d state %d]:peer %d convert to follower, reply.Term %d\n",
-				currentTerm, rf.currentState, rf.me, reply.Term)
-		*/
 		rf.currentState = Follower
 		rf.currentTerm = reply.Term
 		rf.votedFor = nil
@@ -444,11 +408,9 @@ func (rf *Raft) initLeader() {
 	}
 }
 
-func (rf *Raft) onElection() {
-	// fmt.Printf("term[%d]: peer[%d] start election\n", rf.currentTerm, rf.me)
+func (rf *Raft) onCandidate() {
 	rf.mu.Lock()
 	if rf.votedFor == nil {
-		// fmt.Printf("term[%d]: peer[%d] vote for self\n", rf.currentTerm, rf.me)
 		rf.currentTerm++
 		rf.votedFor = rf.me // vote for self
 	}
@@ -456,7 +418,6 @@ func (rf *Raft) onElection() {
 
 	votedFor := rf.votedFor
 	currentTerm := rf.currentTerm
-	// currentState := rf.currentState
 	lastLogIndex := len(rf.log) - 1
 	lastLogTerm := rf.log[lastLogIndex].Term
 	rf.mu.Unlock()
@@ -467,7 +428,7 @@ func (rf *Raft) onElection() {
 		votedNum++
 	}
 
-	// request vote
+	// send request vote to other peers
 	args := &RequestVoteArgs{}
 	args.Term = currentTerm
 	args.CandidateId = rf.me
@@ -478,10 +439,6 @@ func (rf *Raft) onElection() {
 			peerId := i
 			go func() {
 				reply := &RequestVoteReply{}
-				/*
-					fmt.Printf("[onElection term %d state %d]: %d send ReuqestVote to %d\n",
-						currentTerm, currentState, rf.me, peerId)
-				*/
 				ok := rf.peers[peerId].Call("Raft.RequestVote", args, reply)
 				if ok {
 					if reply.VoteGranted {
@@ -491,20 +448,11 @@ func (rf *Raft) onElection() {
 					}
 					if reply.Term > currentTerm {
 						rf.mu.Lock()
-						/*
-							fmt.Printf("[onElection term %d state %d]:peer %d convert to follower, reply.Term %d\n",
-								currentTerm, rf.currentState, rf.me, reply.Term)
-						*/
 						rf.currentState = Follower
 						rf.currentTerm = reply.Term
 						rf.votedFor = nil
 						rf.mu.Unlock()
 					}
-				} else {
-					/*
-						fmt.Printf("[onElection term %d state %d]: peer %d send RequestVote RPC to %d failed\n",
-							currentTerm, rf.currentState, rf.me, peerId)
-					*/
 				}
 			}()
 		}
@@ -516,7 +464,6 @@ func (rf *Raft) onElection() {
 	for {
 		rf.mu.Lock()
 		currentState := rf.currentState
-		// currentTerm := rf.currentTerm
 		lastRcvMs := rf.lastRcvMs
 		rf.mu.Unlock()
 
@@ -533,10 +480,6 @@ func (rf *Raft) onElection() {
 		nowMs := time.Now().UnixNano() / 1e6
 		if nowMs-lastRcvMs > int64(timeout) {
 			// timeout!! need to start new election
-			/*
-				fmt.Printf("[onElection term %d state %d]: peer(%d) election timeout, votedNum(%d), peersNum/2(%d)\n",
-					currentTerm, currentState, rf.me, mVotedNum, len(rf.peers)/2)
-			*/
 			rf.mu.Lock()
 			rf.votedFor = nil
 			rf.mu.Unlock()
@@ -548,13 +491,24 @@ func (rf *Raft) onElection() {
 			rf.mu.Lock()
 			rf.currentState = Leader
 			rf.initLeader() // reinitialize after election
-			// fmt.Printf("term[%d]: peer[%d] become leader\n", rf.currentTerm, rf.me)
 			rf.mu.Unlock()
 			break
 		}
-		// retry after 50ms
-		// time.Sleep(time.Duration(50) * time.Millisecond)
 	}
+}
+
+func (rf *Raft) onLeader() {
+	for i, _ := range rf.peers {
+		if i != rf.me {
+			go rf.sendHeartBeat(i)
+		}
+	}
+	// send heart beat request no more than 10 times in 1s
+	time.Sleep(time.Duration(100) * time.Millisecond)
+}
+
+func (rf *Raft) onFollower() {
+	rf.detectHeartBeat()
 }
 
 func (rf *Raft) startRaft() {
@@ -565,19 +519,13 @@ func (rf *Raft) startRaft() {
 
 		switch state {
 		case Leader:
-			for i, _ := range rf.peers {
-				if i != rf.me {
-					go rf.sendHeartBeat(i)
-				}
-			}
-			// send heart beat request no more than 10 times in 1s
-			time.Sleep(time.Duration(100) * time.Millisecond)
+			rf.onLeader()
 
 		case Follower:
-			rf.detectHeartBeat()
+			rf.onFollower()
 
 		case Candidate:
-			rf.onElection()
+			rf.onCandidate()
 
 		default:
 			return
