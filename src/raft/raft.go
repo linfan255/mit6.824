@@ -216,11 +216,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.LeaderCommit > rf.commitIndex {
 		oldCommitIndex := rf.commitIndex
 		rf.commitIndex = args.LeaderCommit
-		if rf.commitIndex > args.PrevLogIndex+len(args.Entries) {
+		if rf.commitIndex > args.PrevLogIndex+len(args.Entries) &&
+			args.PrevLogIndex+len(args.Entries) >= oldCommitIndex {
 			rf.commitIndex = args.PrevLogIndex + len(args.Entries)
 		}
-		fmt.Printf("update peer %d commitIndex from %d to %d, leaderCommit=%d, index of new entry=%d\n",
-			rf.me, oldCommitIndex, rf.commitIndex, args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
+		//fmt.Printf("update peer %d commitIndex from %d to %d, leaderCommit=%d, index of new entry=%d\n",
+		//rf.me, oldCommitIndex, rf.commitIndex, args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
 	}
 	reply.Success = true
 }
@@ -340,8 +341,15 @@ func (rf *Raft) sendAppendEntries(server int) {
 
 			rf.mu.Lock()
 			if reply.Success {
-				rf.nextIndex[server] = args.PrevLogIndex + len(args.Entries) + 1
-				rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
+				// if reply success, nextIndex and matchIndex should increase monotonically
+				newNextIndex := args.PrevLogIndex + len(args.Entries) + 1
+				newMatchIndex := args.PrevLogIndex + len(args.Entries)
+				if newNextIndex > rf.nextIndex[server] && newNextIndex <= len(rf.log) {
+					rf.nextIndex[server] = newNextIndex
+				}
+				if newMatchIndex > rf.matchIndex[server] && newMatchIndex <= len(rf.log) {
+					rf.matchIndex[server] = newMatchIndex
+				}
 				isBreak = true
 			} else {
 				if reply.Term > rf.currentTerm {
@@ -352,7 +360,9 @@ func (rf *Raft) sendAppendEntries(server int) {
 					rf.votedFor = nil
 					isBreak = true // TODO break after recieved a higher term ?
 				} else {
-					rf.nextIndex[server]--
+					if rf.nextIndex[server] > 0 {
+						rf.nextIndex[server]--
+					}
 				}
 			}
 			rf.mu.Unlock()
@@ -387,6 +397,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	//fmt.Printf("leader %d start agreement on cmd[%d]\n", rf.me, command)
 	isLeader = (rf.currentState == Leader)
 	if !isLeader {
 		return index, term, isLeader
@@ -408,8 +419,12 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		if i != rf.me && len(rf.log)-1 >= rf.nextIndex[i] {
 			go rf.sendAppendEntries(i)
 		} else if i == rf.me {
-			rf.nextIndex[i] = len(rf.log)
-			rf.matchIndex[i] = len(rf.log) - 1
+			if len(rf.log) > rf.nextIndex[i] {
+				rf.nextIndex[i] = len(rf.log)
+			}
+			if len(rf.log)-1 > rf.matchIndex[i] {
+				rf.matchIndex[i] = len(rf.log) - 1
+			}
 		}
 	}
 
@@ -511,6 +526,8 @@ func (rf *Raft) sendHeartBeat(peersId int) {
 
 	reply := &AppendEntriesReply{}
 
+	//fmt.Printf("leader %d send heartbeat to %d, PrevLogIndex=%d, PrevLogTerm=%d LeaderCommit=%d\n",
+	//	rf.me, peersId, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit)
 	ok := rf.peers[peersId].Call("Raft.AppendEntries", args, reply)
 	if ok && reply.Term > currentTerm {
 		rf.mu.Lock()
@@ -616,7 +633,7 @@ func (rf *Raft) onCandidate() {
 		if mVotedNum > len(rf.peers)/2 {
 			rf.mu.Lock()
 			rf.currentState = Leader
-			fmt.Printf("peer %d become leader\n", rf.me)
+			fmt.Printf("[term %d]:peer %d become leader\n", rf.currentTerm, rf.me)
 			rf.initLeader() // reinitialize after election
 			rf.mu.Unlock()
 			break
@@ -689,8 +706,8 @@ func (rf *Raft) startApplier() {
 			applyMsg.CommandValid = true
 			applyMsg.Command = rf.log[rf.lastApplied+1].Command
 			applyMsg.CommandIndex = rf.lastApplied + 1
-			fmt.Printf("peer %d apply cmd %d index %d\n",
-				rf.me, applyMsg.Command, rf.lastApplied+1)
+			fmt.Printf("[term %d]:peer %d apply cmd %d index %d\n",
+				rf.currentTerm, rf.me, applyMsg.Command, rf.lastApplied+1)
 			rf.applyCh <- applyMsg
 			rf.lastApplied++
 		}
