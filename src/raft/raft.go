@@ -61,7 +61,7 @@ const (
 
 const (
 	RetryIntervalMs         int = 10
-	ApplyLogIntervalMs      int = 300
+	ApplyLogIntervalMs      int = 200
 	SendHeartBeatIntervalMs int = 100
 )
 
@@ -331,6 +331,11 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 func (rf *Raft) sendAppendEntries(server int) {
 	for {
 		rf.mu.Lock()
+		if len(rf.log) <= rf.nextIndex[server] || rf.currentState != Leader {
+			rf.mu.Unlock()
+			return
+		}
+
 		args := &AppendEntriesArgs{}
 		args.Term = rf.currentTerm
 		args.LeaderId = rf.me
@@ -338,12 +343,8 @@ func (rf *Raft) sendAppendEntries(server int) {
 		args.PrevLogTerm = rf.log[args.PrevLogIndex].Term
 		args.Entries = rf.log[rf.nextIndex[server]:]
 		args.LeaderCommit = rf.commitIndex
-		currentState := rf.currentState
-		rf.mu.Unlock()
 
-		if currentState != Leader {
-			return
-		}
+		rf.mu.Unlock()
 
 		reply := &AppendEntriesReply{}
 		//fmt.Printf("[term %d]: leader %d send entries to %d, prevLogIndex=%d prevLogTerm=%d leaderCommit=%d\n",
@@ -386,7 +387,6 @@ func (rf *Raft) sendAppendEntries(server int) {
 				break
 			}
 		}
-		time.Sleep(time.Duration(RetryIntervalMs) * time.Millisecond)
 	}
 }
 
@@ -432,9 +432,9 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	term = rf.currentTerm
 
 	for i, _ := range rf.peers {
-		if i != rf.me && len(rf.log)-1 >= rf.nextIndex[i] {
+		if i != rf.me {
 			go rf.sendAppendEntries(i)
-		} else if i == rf.me {
+		} else {
 			if len(rf.log) > rf.nextIndex[i] {
 				rf.nextIndex[i] = len(rf.log)
 			}
@@ -528,6 +528,9 @@ func (rf *Raft) sendHeartBeat(peersId int) {
 	currentTerm := rf.currentTerm
 	commitIndex := rf.commitIndex
 	prevLogIndex := rf.nextIndex[peersId] - 1
+	if prevLogIndex > len(rf.log)-1 {
+		prevLogIndex = len(rf.log) - 1
+	}
 	prevLogTerm := rf.log[prevLogIndex].Term
 	rf.mu.Unlock()
 
