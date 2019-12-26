@@ -59,12 +59,6 @@ const (
 	Candidate RaftState = 2
 )
 
-const (
-	RetryIntervalMs         int = 10
-	ApplyLogIntervalMs      int = 200
-	SendHeartBeatIntervalMs int = 100
-)
-
 //
 // A Go object implementing a single Raft peer.
 //
@@ -162,8 +156,10 @@ type AppendEntriesArgs struct {
 }
 
 type AppendEntriesReply struct {
-	Term    int
-	Success bool
+	Term          int
+	Success       bool
+	ConflictIndex int
+	ConflictTerm  int
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
@@ -175,8 +171,19 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Success = false
 		return
 	}
-	if len(rf.log) <= args.PrevLogIndex ||
-		rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+	if len(rf.log) <= args.PrevLogIndex {
+		reply.ConflictIndex = len(rf.log)
+		reply.ConflictTerm = -1
+		reply.Success = false
+		return
+	}
+	if rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+		reply.ConflictTerm = rf.log[args.PrevLogIndex].Term
+		ci := args.PrevLogIndex
+		for rf.log[ci].Term == reply.ConflictTerm && ci > 0 {
+			ci--
+		}
+		reply.ConflictIndex = ci + 1
 		reply.Success = false
 		return
 	}
@@ -349,6 +356,7 @@ func (rf *Raft) sendAppendEntries(server int) {
 		reply := &AppendEntriesReply{}
 		//fmt.Printf("[term %d]: leader %d send entries to %d, prevLogIndex=%d prevLogTerm=%d leaderCommit=%d\n",
 		//	rf.currentTerm, rf.me, server, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit)
+		//fmt.Println("call sendAppendEntries")
 		ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 		if ok {
 			isBreak := false
@@ -374,10 +382,17 @@ func (rf *Raft) sendAppendEntries(server int) {
 					rf.votedFor = nil
 					isBreak = true // TODO break after recieved a higher term ?
 				} else {
-					if rf.nextIndex[server] > 0 {
-						//fmt.Printf("[term %d]: leader %d sent entries to %d meet conflict entries with prevLogIndex=%d prevLogTerm=%d\n",
-						//	rf.currentTerm, rf.me, server, args.PrevLogIndex, args.PrevLogTerm)
-						rf.nextIndex[server]--
+					findConflictTerm := false
+					for i := len(rf.log) - 1; i > 0; i-- {
+						if rf.log[i].Term == reply.ConflictTerm &&
+							(i == len(rf.log)-1 || rf.log[i+1].Term != reply.ConflictTerm) {
+							rf.nextIndex[server] = i + 1
+							findConflictTerm = true
+							break
+						}
+					}
+					if !findConflictTerm {
+						rf.nextIndex[server] = reply.ConflictIndex
 					}
 				}
 			}
@@ -387,6 +402,7 @@ func (rf *Raft) sendAppendEntries(server int) {
 				break
 			}
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -519,7 +535,7 @@ func (rf *Raft) detectHeartBeat() {
 			rf.mu.Unlock()
 			break
 		}
-		time.Sleep(time.Duration(RetryIntervalMs) * time.Millisecond)
+		time.Sleep(80 * time.Millisecond)
 	}
 }
 
@@ -530,6 +546,9 @@ func (rf *Raft) sendHeartBeat(peersId int) {
 	prevLogIndex := rf.nextIndex[peersId] - 1
 	if prevLogIndex > len(rf.log)-1 {
 		prevLogIndex = len(rf.log) - 1
+	}
+	if prevLogIndex < 0 {
+		prevLogIndex = 0
 	}
 	prevLogTerm := rf.log[prevLogIndex].Term
 	rf.mu.Unlock()
@@ -547,6 +566,7 @@ func (rf *Raft) sendHeartBeat(peersId int) {
 
 	//fmt.Printf("leader %d send heartbeat to %d, PrevLogIndex=%d, PrevLogTerm=%d LeaderCommit=%d\n",
 	//	rf.me, peersId, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit)
+	//fmt.Println("call sendHeartBeat")
 	ok := rf.peers[peersId].Call("Raft.AppendEntries", args, reply)
 	if ok && reply.Term > currentTerm {
 		rf.mu.Lock()
@@ -601,6 +621,7 @@ func (rf *Raft) onCandidate() {
 			peerId := i
 			go func() {
 				reply := &RequestVoteReply{}
+				//fmt.Println("call RequestVote")
 				ok := rf.peers[peerId].Call("Raft.RequestVote", args, reply)
 				if ok {
 					if reply.VoteGranted {
@@ -657,7 +678,7 @@ func (rf *Raft) onCandidate() {
 			rf.mu.Unlock()
 			break
 		}
-		time.Sleep(time.Duration(RetryIntervalMs) * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -668,7 +689,7 @@ func (rf *Raft) onLeader() {
 		}
 	}
 	// send heart beat request no more than 10 times in 1s
-	time.Sleep(time.Duration(SendHeartBeatIntervalMs) * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 }
 
 func (rf *Raft) onFollower() {
@@ -732,7 +753,7 @@ func (rf *Raft) startApplier() {
 		}
 
 		rf.mu.Unlock()
-		time.Sleep(time.Duration(ApplyLogIntervalMs) * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
