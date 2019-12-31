@@ -16,10 +16,8 @@ const (
 	Follower  RaftState = 1
 	Candidate RaftState = 2
 
-	TimeoutEvent       RaftEvent = 0
-	GetVoteEvent       RaftEvent = 1
-	GetHigherTermEvent RaftEvent = 2
-	DetectHbEvent      RaftEvent = 3
+	TimeoutEvent RaftEvent = 0
+	GetVoteEvent RaftEvent = 1
 )
 
 //
@@ -102,7 +100,12 @@ func (rf *Raft) callHandler(event RaftEvent, args ...interface{}) bool {
 ///////////////////////////////////////////////////////////////////
 
 func startElection(rf *Raft, args ...interface{}) bool {
-	DPrintf("[term:%d] server %d timeout, start election\n", rf.currentTerm, rf.me)
+	if rf.currentState == Leader {
+		return true
+	}
+
+	DPrintf("[term:%d] %d start election, increase term\n",
+		rf.currentTerm, rf.me)
 	rf.currentState = Candidate
 	rf.votedFor = rf.me
 	rf.voteNum = 1
@@ -144,7 +147,7 @@ func receiveVote(rf *Raft, args ...interface{}) bool {
 
 	rf.voteNum++
 	if rf.voteNum > len(rf.peers)/2 {
-		DPrintf("[term:%d] %d become leader", rf.currentTerm, rf.me)
+		DPrintf("[term:%d] %d become leader\n", rf.currentTerm, rf.me)
 		rf.currentState = Leader
 		rf.initLeader()
 		go rf.sendHeartbeat(rf.currentTerm)

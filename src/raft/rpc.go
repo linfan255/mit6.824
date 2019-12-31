@@ -56,6 +56,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.Term >= rf.currentTerm {
 		rf.currentState = Follower
 		if args.Term > rf.currentTerm {
+			DPrintf("[term:%d] %d get higher AppendEntriesArgs.Term(%d)\n",
+				rf.currentTerm, rf.me, args.Term)
 			rf.currentTerm = args.Term
 			rf.votedFor = nil
 			rf.voteNum = 0
@@ -120,14 +122,12 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	reply.Term = rf.currentTerm
 	if args.Term < rf.currentTerm {
-		DPrintf("[term:%d] %d not grant to %d, args.Term(%d)\n",
-			rf.currentTerm, rf.me, args.CandidateId, args.Term)
 		reply.VoteGranted = false
 		return
 	}
 	if args.Term > rf.currentTerm {
-		DPrintf("[term:%d] %d received a higher Term(%d) from %d\n",
-			rf.currentTerm, rf.me, args.Term, args.CandidateId)
+		DPrintf("[term:%d] %d get higher RequestVoteArgs.Term(%d)\n",
+			rf.currentTerm, rf.me, args.Term)
 		rf.currentTerm = args.Term
 		rf.votedFor = nil
 		rf.voteNum = 0
@@ -139,16 +139,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
 		rf.resetTimer()
-		DPrintf("[term:%d] %d grant vote to %d\n",
-			rf.currentTerm, rf.me, args.CandidateId)
 	} else {
-		if rf.votedFor != nil {
-			DPrintf("[term:%d] %d already vote to %d, so not vote to %d\n",
-				rf.currentTerm, rf.me, rf.votedFor, args.CandidateId)
-		} else {
-			DPrintf("[term:%d] args.llt(%d) args.lli(%d) llt(%d) lli(%d)\n",
-				rf.currentTerm, args.LastLogTerm, args.LastLogIndex, lastLogTerm, lastLogIndex)
-		}
 		reply.VoteGranted = false
 	}
 }

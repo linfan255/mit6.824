@@ -47,11 +47,12 @@ type ApplyMsg struct {
 }
 
 const (
-	MinTimeout int = 400
-	MaxTimeout int = 650
+	MinTimeout int = 1000
+	MaxTimeout int = 2000
 
-	DetectTimeoutIntervalMs int = 5
-	SendHbIntervalMs        int = 100
+	RetryIntervalMs  int = 10
+	SendHbIntervalMs int = 100
+	ApplyIntervalMs  int = 100
 )
 
 func (rf *Raft) resetTimer() {
@@ -112,8 +113,6 @@ func (rf *Raft) readPersist(data []byte) {
 
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 	reply := &RequestVoteReply{}
-	DPrintf("[term:%d] %d send RequestVote to %d\n",
-		args.Term, args.CandidateId, server)
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	if !ok {
 		return
@@ -124,6 +123,8 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 	} else {
 		rf.mu.Lock()
 		if reply.Term > rf.currentTerm {
+			DPrintf("[term:%d] %d get higher RequestVoteReply.term(%d) from %d\n",
+				rf.currentTerm, rf.me, reply.Term, server)
 			rf.currentTerm = reply.Term
 			rf.currentState = Follower
 			rf.votedFor = nil
@@ -131,27 +132,6 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 		}
 		rf.mu.Unlock()
 	}
-}
-
-//
-// the service using Raft (e.g. a k/v server) wants to start
-// agreement on the next command to be appended to Raft's log. if this
-// server isn't the leader, returns false. otherwise start the
-// agreement and return immediately. there is no guarantee that this
-// command will ever be committed to the Raft log, since the leader
-// may fail or lose an election. even if the Raft instance has been killed,
-// this function should return gracefully.
-//
-// the first return value is the index that the command will appear at
-// if it's ever committed. the second return value is the current
-// term. the third return value is true if this server believes it is
-// the leader.
-//
-func (rf *Raft) Start(command interface{}) (int, int, bool) {
-	index := -1
-	term := -1
-	isLeader := true
-	return index, term, isLeader
 }
 
 //
@@ -197,6 +177,8 @@ func (rf *Raft) sendHeartbeat(sendHbTerm int) {
 
 					rf.mu.Lock()
 					if ok && reply.Term > rf.currentTerm {
+						DPrintf("[term:%d] %d get higher AppendEntriesReply.term(%d) from %d\n",
+							rf.currentTerm, rf.me, reply.Term, follower)
 						rf.currentTerm = reply.Term
 						rf.currentState = Follower
 						rf.votedFor = nil
@@ -233,6 +215,7 @@ func (rf *Raft) registerHandler() {
 
 func (rf *Raft) startRaft() {
 	rf.registerHandler()
+	go rf.startApplier()
 	for {
 		select {
 		case <-rf.electionTimer.C:
