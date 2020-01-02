@@ -47,9 +47,9 @@ type Raft struct {
 	// FSM
 	// start up as follower
 	// =====================================================================================
-	// event								 | state change
+	// event                                 | state change
 	// =====================================================================================
-	// timeout or granting vote to others:   | follower -> candidate, candidate -> candidate
+	// timeout:                              | follower -> candidate, candidate -> candidate
 	// receives votes from majority servers: | candidate -> leader
 	// discover server with higher term:     | leader -> follower
 	// =====================================================================================
