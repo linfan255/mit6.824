@@ -1,5 +1,7 @@
 package raft
 
+// import "fmt"
+
 type Entry struct {
 	Term    int
 	Command interface{}
@@ -86,8 +88,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			rf.log = append(rf.log, args.Entries[i])
 		}
 	}
-	rf.commitIndex = Max(rf.commitIndex, args.LeaderCommit)
-	rf.commitIndex = Min(rf.commitIndex, args.PrevLogIndex+len(args.Entries))
+	newCommitIndex := Min(args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
+	rf.commitIndex = Max(rf.commitIndex, newCommitIndex)
+	rf.applyLog()
 	reply.Success = true
 }
 

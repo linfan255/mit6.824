@@ -24,6 +24,7 @@ import "math/rand"
 import "time"
 
 // import "fmt"
+
 // import "log"
 
 // import "bytes"
@@ -111,6 +112,101 @@ func (rf *Raft) readPersist(data []byte) {
 	// }
 }
 
+func (rf *Raft) trySendAppendEntries(server int) {
+	for !rf.sendAppendEntries(server, false) {
+		duration := time.Duration(RetryIntervalMs)
+		time.Sleep(duration * time.Millisecond)
+	}
+}
+
+func (rf *Raft) sendHeartbeat(sendTerm int) {
+	for {
+		rf.mu.Lock()
+		currentTerm := rf.currentTerm
+		currentState := rf.currentState
+		rf.mu.Unlock()
+
+		if currentState != Leader || sendTerm != currentTerm {
+			return
+		}
+
+		for i, _ := range rf.peers {
+			go rf.sendAppendEntries(i, true)
+		}
+
+		duration := time.Duration(SendHbIntervalMs)
+		time.Sleep(duration * time.Millisecond)
+	}
+}
+
+func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
+	rf.mu.Lock()
+	if rf.me == server || rf.currentState != Leader {
+		rf.mu.Unlock()
+		return true
+	}
+	if !isHeartbeat && (len(rf.log) < rf.nextIndex[server] ||
+		rf.nextIndex[server] <= 0) {
+		rf.mu.Unlock()
+		return true
+	}
+
+	args := &AppendEntriesArgs{}
+	args.Term = rf.currentTerm
+	args.LeaderId = rf.me
+	args.LeaderCommit = rf.commitIndex
+	args.PrevLogIndex = Min(rf.nextIndex[server]-1, len(rf.log)-1)
+	args.PrevLogIndex = Max(args.PrevLogIndex, 0)
+	args.PrevLogTerm = rf.log[args.PrevLogIndex].Term
+
+	if isHeartbeat {
+		args.Entries = nil
+	} else {
+		args.Entries = rf.log[rf.nextIndex[server]:]
+	}
+	rf.mu.Unlock()
+
+	reply := &AppendEntriesReply{}
+	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
+	ret := false
+	if ok {
+		rf.mu.Lock()
+		if reply.Success {
+			newNextIndex := args.PrevLogIndex + 1 + len(args.Entries)
+			oldMatchIndex := rf.matchIndex[server]
+			rf.nextIndex[server] = Max(rf.nextIndex[server], newNextIndex)
+			rf.matchIndex[server] = Max(rf.matchIndex[server], newNextIndex-1)
+			if oldMatchIndex < rf.matchIndex[server] {
+				rf.updateCommitIndex()
+			}
+			ret = true
+		} else {
+			if reply.Term > rf.currentTerm {
+				rf.currentTerm = reply.Term
+				rf.currentState = Follower
+				rf.votedFor = nil
+				rf.voteNum = 0
+			} else if reply.ConflictIndex != -1 {
+				// meet conflict
+				findConflictTerm := false
+				for i := len(rf.log) - 1; i > 0; i-- {
+					if rf.log[i].Term == reply.ConflictTerm &&
+						(i == len(rf.log)-1 || rf.log[i+1].Term != reply.ConflictTerm) {
+						rf.nextIndex[server] = i + 1
+						findConflictTerm = true
+						break
+					}
+				}
+				if !findConflictTerm {
+					rf.nextIndex[server] = reply.ConflictIndex
+				}
+			}
+		}
+		rf.mu.Unlock()
+	}
+	return ret
+}
+
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 	reply := &RequestVoteReply{}
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
@@ -144,56 +240,6 @@ func (rf *Raft) Kill() {
 	// Your code here, if desired.
 }
 
-func (rf *Raft) sendHeartbeat(sendHbTerm int) {
-	for {
-		rf.mu.Lock()
-		currentTerm := rf.currentTerm
-		currentState := rf.currentState
-		commitIndex := rf.commitIndex
-		rf.mu.Unlock()
-
-		if currentState != Leader || currentTerm != sendHbTerm {
-			return
-		}
-
-		args := &AppendEntriesArgs{
-			Term:         currentTerm,
-			LeaderId:     rf.me,
-			Entries:      nil,
-			LeaderCommit: commitIndex,
-		}
-
-		for i, _ := range rf.peers {
-			if i != rf.me {
-				go func(follower int, args *AppendEntriesArgs) {
-					rf.mu.Lock()
-					args.PrevLogIndex = Min(rf.nextIndex[follower]-1, len(rf.log)-1)
-					args.PrevLogIndex = Max(args.PrevLogIndex, 0)
-					args.PrevLogTerm = rf.log[args.PrevLogIndex].Term
-					rf.mu.Unlock()
-
-					reply := &AppendEntriesReply{}
-					ok := rf.peers[follower].Call("Raft.AppendEntries", args, reply)
-
-					rf.mu.Lock()
-					if ok && reply.Term > rf.currentTerm {
-						DPrintf("[term:%d] %d get higher AppendEntriesReply.term(%d) from %d\n",
-							rf.currentTerm, rf.me, reply.Term, follower)
-						rf.currentTerm = reply.Term
-						rf.currentState = Follower
-						rf.votedFor = nil
-						rf.voteNum = 0
-					}
-					rf.mu.Unlock()
-				}(i, args)
-			}
-		}
-
-		duration := time.Duration(SendHbIntervalMs)
-		time.Sleep(duration * time.Millisecond)
-	}
-}
-
 // notice!! not thread safe
 func (rf *Raft) initLeader() {
 	rf.nextIndex = make([]int, len(rf.peers))
@@ -215,7 +261,6 @@ func (rf *Raft) registerHandler() {
 
 func (rf *Raft) startRaft() {
 	rf.registerHandler()
-	go rf.startApplier()
 	for {
 		select {
 		case <-rf.electionTimer.C:

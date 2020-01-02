@@ -13,12 +13,21 @@ func (rf *Raft) PrintLogStatus() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	if rf.currentState == Leader {
+		fmt.Printf(" *ci:%d* ", rf.commitIndex)
+	} else {
+		fmt.Printf(" -ci:%d- ", rf.commitIndex)
+	}
 	for _, v := range rf.log {
 		if v.Command == nil {
 			fmt.Printf("%d:-- ", v.Term)
 		} else {
 			fmt.Printf("%d:%d ", v.Term, v.Command)
 		}
+	}
+	fmt.Printf(" | ")
+	for i, v := range rf.nextIndex {
+		fmt.Printf("%d:%d ", i, v)
 	}
 	fmt.Println()
 }
