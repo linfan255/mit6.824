@@ -30,9 +30,9 @@ type Raft struct {
 	me        int                 // this peer's index into peers[]
 
 	// persistent state on all servers
-	currentTerm int
-	votedFor    interface{}
-	log         []Entry
+	CurrentTerm int
+	VotedFor    int
+	Log         []Entry
 
 	// volatile state on all servers
 	commitIndex int
@@ -105,26 +105,27 @@ func startElection(rf *Raft, args ...interface{}) bool {
 	}
 
 	DPrintf("[term:%d] %d start election, increase term\n",
-		rf.currentTerm, rf.me)
+		rf.CurrentTerm, rf.me)
 	rf.currentState = Candidate
-	rf.votedFor = rf.me
+	rf.VotedFor = rf.me
 	rf.voteNum = 1
-	rf.currentTerm++
+	rf.CurrentTerm++
 
 	rf.resetTimer()
 
-	requestVoteArgs := &RequestVoteArgs{
-		Term:         rf.currentTerm,
+	requestVoteArgs := RequestVoteArgs{
+		Term:         rf.CurrentTerm,
 		CandidateId:  rf.me,
-		LastLogIndex: len(rf.log) - 1,
-		LastLogTerm:  rf.log[len(rf.log)-1].Term,
+		LastLogIndex: len(rf.Log) - 1,
+		LastLogTerm:  rf.Log[len(rf.Log)-1].Term,
 	}
 
 	for i, _ := range rf.peers {
 		if i != rf.me {
-			go rf.sendRequestVote(i, requestVoteArgs)
+			go rf.sendRequestVote(i, &requestVoteArgs)
 		}
 	}
+	rf.persist()
 	return true
 }
 
@@ -137,7 +138,7 @@ func receiveVote(rf *Raft, args ...interface{}) bool {
 		return false
 	}
 	if sendTerm, ok := args[0].(int); ok {
-		if sendTerm != rf.currentTerm {
+		if sendTerm != rf.CurrentTerm {
 			return true
 		}
 	} else {
@@ -147,10 +148,10 @@ func receiveVote(rf *Raft, args ...interface{}) bool {
 
 	rf.voteNum++
 	if rf.voteNum > len(rf.peers)/2 {
-		DPrintf("[term:%d] %d become leader\n", rf.currentTerm, rf.me)
+		DPrintf("[term:%d] %d become leader\n", rf.CurrentTerm, rf.me)
 		rf.currentState = Leader
 		rf.initLeader()
-		go rf.sendHeartbeat(rf.currentTerm)
+		go rf.sendHeartbeat(rf.CurrentTerm)
 	}
 	return true
 }

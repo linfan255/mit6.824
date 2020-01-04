@@ -25,19 +25,20 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		return index, term, isLeader
 	}
 
-	entry := Entry{rf.currentTerm, command}
-	rf.log = append(rf.log, entry)
+	entry := Entry{rf.CurrentTerm, command}
+	rf.Log = append(rf.Log, entry)
 
-	index = len(rf.log) - 1
-	term = rf.currentTerm
+	index = len(rf.Log) - 1
+	term = rf.CurrentTerm
 
 	for i, _ := range rf.peers {
-		go rf.trySendAppendEntries(i)
+		go rf.trySendAppendEntries(i, rf.CurrentTerm)
 	}
 
-	rf.nextIndex[rf.me] = Max(rf.nextIndex[rf.me], len(rf.log))
-	rf.matchIndex[rf.me] = Max(rf.matchIndex[rf.me], len(rf.log)-1)
+	rf.nextIndex[rf.me] = Max(rf.nextIndex[rf.me], len(rf.Log))
+	rf.matchIndex[rf.me] = Max(rf.matchIndex[rf.me], len(rf.Log)-1)
 	rf.updateCommitIndex()
+	rf.persist()
 
 	return index, term, isLeader
 }
@@ -45,7 +46,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 func (rf *Raft) updateCommitIndex() {
 	// update commitIndex for leader
 	if rf.currentState == Leader {
-		for i := len(rf.log) - 1; i > rf.commitIndex; i-- {
+		for i := len(rf.Log) - 1; i > rf.commitIndex; i-- {
 			count := 0
 			for j := 0; j < len(rf.matchIndex); j++ {
 				if rf.matchIndex[j] >= i {
@@ -53,7 +54,7 @@ func (rf *Raft) updateCommitIndex() {
 				}
 			}
 			if count > len(rf.peers)/2 &&
-				rf.log[i].Term == rf.currentTerm {
+				rf.Log[i].Term == rf.CurrentTerm {
 				rf.commitIndex = i
 				break
 			}
@@ -66,10 +67,10 @@ func (rf *Raft) updateCommitIndex() {
 
 func (rf *Raft) applyLog() {
 	for rf.commitIndex > rf.lastApplied &&
-		rf.lastApplied < len(rf.log)-1 {
+		rf.lastApplied < len(rf.Log)-1 {
 		var applyMsg ApplyMsg
 		applyMsg.CommandValid = true
-		applyMsg.Command = rf.log[rf.lastApplied+1].Command
+		applyMsg.Command = rf.Log[rf.lastApplied+1].Command
 		applyMsg.CommandIndex = rf.lastApplied + 1
 		rf.applyCh <- applyMsg
 		rf.lastApplied++

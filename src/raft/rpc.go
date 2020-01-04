@@ -29,23 +29,23 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	reply.Term = rf.currentTerm
-	if rf.currentTerm > args.Term {
+	reply.Term = rf.CurrentTerm
+	if rf.CurrentTerm > args.Term {
 		reply.Success = false
 		reply.ConflictTerm = -1
 		reply.ConflictIndex = -1
 		return
 	}
-	if len(rf.log) <= args.PrevLogIndex {
-		reply.ConflictIndex = len(rf.log)
+	if len(rf.Log) <= args.PrevLogIndex {
+		reply.ConflictIndex = len(rf.Log)
 		reply.ConflictTerm = -1
 		reply.Success = false
 		return
 	}
-	if rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
-		reply.ConflictTerm = rf.log[args.PrevLogIndex].Term
+	if rf.Log[args.PrevLogIndex].Term != args.PrevLogTerm {
+		reply.ConflictTerm = rf.Log[args.PrevLogIndex].Term
 		ci := args.PrevLogIndex
-		for rf.log[ci].Term == reply.ConflictTerm && ci > 0 {
+		for rf.Log[ci].Term == reply.ConflictTerm && ci > 0 {
 			ci--
 		}
 		reply.ConflictIndex = ci + 1
@@ -55,13 +55,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	rf.resetTimer()
 
-	if args.Term >= rf.currentTerm {
+	if args.Term >= rf.CurrentTerm {
 		rf.currentState = Follower
-		if args.Term > rf.currentTerm {
+		if args.Term > rf.CurrentTerm {
 			DPrintf("[term:%d] %d get higher AppendEntriesArgs.Term(%d)\n",
-				rf.currentTerm, rf.me, args.Term)
-			rf.currentTerm = args.Term
-			rf.votedFor = nil
+				rf.CurrentTerm, rf.me, args.Term)
+			rf.CurrentTerm = args.Term
+			rf.VotedFor = -1
 			rf.voteNum = 0
 		}
 	}
@@ -71,26 +71,27 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		splitIndex := 0
 		findConflict := false
 		for ; splitIndex < len(args.Entries); splitIndex++ {
-			if args.PrevLogIndex+splitIndex+1 >= len(rf.log) {
+			if args.PrevLogIndex+splitIndex+1 >= len(rf.Log) {
 				break
 			}
-			if rf.log[args.PrevLogIndex+splitIndex+1].Term != args.Entries[splitIndex].Term {
+			if rf.Log[args.PrevLogIndex+splitIndex+1].Term != args.Entries[splitIndex].Term {
 				findConflict = true
 				break
 			}
 		}
 
 		if findConflict {
-			rf.log = rf.log[:args.PrevLogIndex+splitIndex+1]
+			rf.Log = rf.Log[:args.PrevLogIndex+splitIndex+1]
 		}
 
 		for i := splitIndex; i < len(args.Entries); i++ {
-			rf.log = append(rf.log, args.Entries[i])
+			rf.Log = append(rf.Log, args.Entries[i])
 		}
 	}
 	newCommitIndex := Min(args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
 	rf.commitIndex = Max(rf.commitIndex, newCommitIndex)
 	rf.applyLog()
+	rf.persist()
 	reply.Success = true
 }
 
@@ -120,29 +121,30 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	lastLogIndex := len(rf.log) - 1
-	lastLogTerm := rf.log[lastLogIndex].Term
+	lastLogIndex := len(rf.Log) - 1
+	lastLogTerm := rf.Log[lastLogIndex].Term
 
-	reply.Term = rf.currentTerm
-	if args.Term < rf.currentTerm {
+	reply.Term = rf.CurrentTerm
+	if args.Term < rf.CurrentTerm {
 		reply.VoteGranted = false
 		return
 	}
-	if args.Term > rf.currentTerm {
+	if args.Term > rf.CurrentTerm {
 		DPrintf("[term:%d] %d get higher RequestVoteArgs.Term(%d)\n",
-			rf.currentTerm, rf.me, args.Term)
-		rf.currentTerm = args.Term
-		rf.votedFor = nil
+			rf.CurrentTerm, rf.me, args.Term)
+		rf.CurrentTerm = args.Term
+		rf.VotedFor = -1
 		rf.voteNum = 0
 		rf.currentState = Follower
 	}
 
-	if (rf.votedFor == nil || rf.votedFor == args.CandidateId) &&
+	if (rf.VotedFor == -1 || rf.VotedFor == args.CandidateId) &&
 		isMoreUpToDate(args.LastLogTerm, args.LastLogIndex, lastLogTerm, lastLogIndex) {
 		reply.VoteGranted = true
-		rf.votedFor = args.CandidateId
+		rf.VotedFor = args.CandidateId
 		rf.resetTimer()
 	} else {
 		reply.VoteGranted = false
 	}
+	rf.persist()
 }
