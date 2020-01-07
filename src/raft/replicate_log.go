@@ -32,7 +32,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	term = rf.CurrentTerm
 
 	for i, _ := range rf.peers {
-		go rf.trySendAppendEntries(i, rf.CurrentTerm)
+		go rf.trySendAppendEntries(i)
 	}
 
 	rf.nextIndex[rf.me] = Max(rf.nextIndex[rf.me], len(rf.Log))

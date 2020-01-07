@@ -36,6 +36,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.ConflictIndex = -1
 		return
 	}
+
+	rf.resetTimer()
+
 	if len(rf.Log) <= args.PrevLogIndex {
 		reply.ConflictIndex = len(rf.Log)
 		reply.ConflictTerm = -1
@@ -53,13 +56,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
-	rf.resetTimer()
-
 	if args.Term >= rf.CurrentTerm {
 		rf.currentState = Follower
 		if args.Term > rf.CurrentTerm {
-			DPrintf("[term:%d] %d get higher AppendEntriesArgs.Term(%d)\n",
-				rf.CurrentTerm, rf.me, args.Term)
 			rf.CurrentTerm = args.Term
 			rf.VotedFor = -1
 			rf.voteNum = 0
@@ -130,8 +129,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		return
 	}
 	if args.Term > rf.CurrentTerm {
-		DPrintf("[term:%d] %d get higher RequestVoteArgs.Term(%d)\n",
-			rf.CurrentTerm, rf.me, args.Term)
 		rf.CurrentTerm = args.Term
 		rf.VotedFor = -1
 		rf.voteNum = 0

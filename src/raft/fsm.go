@@ -104,8 +104,6 @@ func startElection(rf *Raft, args ...interface{}) bool {
 		return true
 	}
 
-	DPrintf("[term:%d] %d start election, increase term\n",
-		rf.CurrentTerm, rf.me)
 	rf.currentState = Candidate
 	rf.VotedFor = rf.me
 	rf.voteNum = 1
@@ -121,9 +119,7 @@ func startElection(rf *Raft, args ...interface{}) bool {
 	}
 
 	for i, _ := range rf.peers {
-		if i != rf.me {
-			go rf.sendRequestVote(i, &requestVoteArgs)
-		}
+		go rf.sendRequestVote(i, &requestVoteArgs)
 	}
 	rf.persist()
 	return true
@@ -148,7 +144,6 @@ func receiveVote(rf *Raft, args ...interface{}) bool {
 
 	rf.voteNum++
 	if rf.voteNum > len(rf.peers)/2 {
-		DPrintf("[term:%d] %d become leader\n", rf.CurrentTerm, rf.me)
 		rf.currentState = Leader
 		rf.initLeader()
 		go rf.sendHeartbeat(rf.CurrentTerm)
