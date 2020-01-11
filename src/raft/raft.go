@@ -126,11 +126,6 @@ func (rf *Raft) sendHeartbeat(sendTerm int) {
 
 func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
 	rf.mu.Lock()
-	if isHeartbeat {
-		DPrintf("send heartbeat\n")
-	} else {
-		DPrintf("send entries\n")
-	}
 	if rf.me == server || rf.currentState != Leader {
 		rf.mu.Unlock()
 		return true
@@ -204,7 +199,6 @@ func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
 }
 
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
-	DPrintf("send request vote\n")
 	if server == rf.me {
 		return
 	}
@@ -215,7 +209,8 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if !ok || rf.CurrentTerm != args.Term {
+	if !ok || rf.CurrentTerm != args.Term ||
+		rf.currentState != Candidate {
 		return
 	}
 
@@ -304,7 +299,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.applyCh = applyCh
 
 	rf.currentState = Follower
-	rf.getVoteCh = make(chan int, 10)
+	rf.getVoteCh = make(chan int, 3000)
 	rf.handlers = make(map[RaftState]map[RaftEvent]RaftHandler)
 	rf.voteNum = 0
 

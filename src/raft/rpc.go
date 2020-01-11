@@ -56,13 +56,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
-	if args.Term >= rf.CurrentTerm {
-		rf.currentState = Follower
-		if args.Term > rf.CurrentTerm {
-			rf.CurrentTerm = args.Term
-			rf.VotedFor = -1
-			rf.voteNum = 0
-		}
+	rf.currentState = Follower
+	if args.Term > rf.CurrentTerm {
+		rf.CurrentTerm = args.Term
+		rf.VotedFor = -1
+		rf.voteNum = 0
 	}
 
 	if args.Entries != nil {
