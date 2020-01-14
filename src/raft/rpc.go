@@ -29,6 +29,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	if !rf.isRunning {
+		return
+	}
+
 	reply.Term = rf.CurrentTerm
 	if rf.CurrentTerm > args.Term {
 		reply.Success = false
@@ -36,7 +40,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.ConflictIndex = -1
 		return
 	}
-
 	rf.resetTimer()
 
 	if len(rf.Log) <= args.PrevLogIndex {
@@ -89,7 +92,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.commitIndex = Max(rf.commitIndex, newCommitIndex)
 	rf.applyLog()
 	rf.persist()
+
 	reply.Success = true
+	reply.Term = rf.CurrentTerm
 }
 
 /**************************************************/
@@ -118,6 +123,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	if !rf.isRunning {
+		return
+	}
+
 	lastLogIndex := len(rf.Log) - 1
 	lastLogTerm := rf.Log[lastLogIndex].Term
 
@@ -135,10 +144,14 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	if (rf.VotedFor == -1 || rf.VotedFor == args.CandidateId) &&
 		isMoreUpToDate(args.LastLogTerm, args.LastLogIndex, lastLogTerm, lastLogIndex) {
+		DPrintf("[term %d] peer(%d) grant vote to %d\n",
+			rf.CurrentTerm, rf.me, args.CandidateId)
 		reply.VoteGranted = true
 		rf.VotedFor = args.CandidateId
 		rf.resetTimer()
 	} else {
+		DPrintf("[term %d] peer(%d) rf.VotedFor=%d args.Candidate=%d args.LastLogTerm=%d args.LastLogIndex=%d lastLogTerm=%d lastLogIndex=%d\n",
+			rf.CurrentTerm, rf.me, rf.VotedFor, args.CandidateId, args.LastLogTerm, args.LastLogIndex, lastLogTerm, lastLogIndex)
 		reply.VoteGranted = false
 	}
 	rf.persist()

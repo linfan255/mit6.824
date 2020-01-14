@@ -18,6 +18,7 @@ const (
 
 	TimeoutEvent RaftEvent = 0
 	GetVoteEvent RaftEvent = 1
+	RaftEndEvent RaftEvent = 2
 )
 
 //
@@ -61,6 +62,8 @@ type Raft struct {
 	voteNum  int // how many votes does this peer get
 
 	electionTimer *time.Timer
+	isRunning     bool
+	endCh         chan interface{}
 }
 
 func (rf *Raft) addHandler(state RaftState, event RaftEvent, handler RaftHandler) bool {
@@ -99,10 +102,19 @@ func (rf *Raft) callHandler(event RaftEvent, args ...interface{}) bool {
 // 5) not get blocked inside handler
 ///////////////////////////////////////////////////////////////////
 
+func endRaft(rf *Raft, args ...interface{}) bool {
+	rf.isRunning = false
+	rf.electionTimer.Stop()
+	return true
+}
+
 func startElection(rf *Raft, args ...interface{}) bool {
-	if rf.currentState == Leader {
+	if rf.currentState == Leader || !rf.isRunning {
 		return true
 	}
+
+	DPrintf("[term %d] peer(%d) detect timeout at %d\n",
+		rf.CurrentTerm, rf.me, time.Now().UnixNano()/1e6)
 
 	rf.currentState = Candidate
 	rf.VotedFor = rf.me
@@ -126,7 +138,7 @@ func startElection(rf *Raft, args ...interface{}) bool {
 }
 
 func receiveVote(rf *Raft, args ...interface{}) bool {
-	if rf.currentState != Candidate {
+	if rf.currentState != Candidate || !rf.isRunning {
 		return true
 	}
 	if len(args) != 1 {
@@ -144,6 +156,8 @@ func receiveVote(rf *Raft, args ...interface{}) bool {
 
 	rf.voteNum++
 	if rf.voteNum > len(rf.peers)/2 {
+		DPrintf("[term %d] peer(%d) receive %d vote, become leader\n",
+			rf.CurrentTerm, rf.me, rf.voteNum)
 		rf.currentState = Leader
 		rf.initLeader()
 		go rf.sendHeartbeat(rf.CurrentTerm)

@@ -114,7 +114,7 @@ func (rf *Raft) sendHeartbeat(sendTerm int) {
 	duration := time.Duration(SendHbIntervalMs)
 	for {
 		term, isleader := rf.GetState()
-		if !isleader || sendTerm != term {
+		if !rf.isRunning || !isleader || sendTerm != term {
 			return
 		}
 		for i, _ := range rf.peers {
@@ -126,7 +126,7 @@ func (rf *Raft) sendHeartbeat(sendTerm int) {
 
 func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
 	rf.mu.Lock()
-	if rf.me == server || rf.currentState != Leader {
+	if !rf.isRunning || rf.me == server || rf.currentState != Leader {
 		rf.mu.Unlock()
 		return true
 	}
@@ -157,7 +157,7 @@ func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if rf.CurrentTerm != args.Term {
+	if rf.CurrentTerm != args.Term || !rf.isRunning {
 		return true
 	}
 
@@ -178,7 +178,7 @@ func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
 				rf.VotedFor = -1
 				rf.voteNum = 0
 				rf.persist()
-			} else if reply.ConflictIndex != -1 {
+			} else {
 				// meet conflict
 				findConflictTerm := false
 				for i := len(rf.Log) - 1; i > 0; i-- {
@@ -203,6 +203,8 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 		return
 	}
 
+	DPrintf("[term %d] peer(%d) sendRequestVote to %d LastLogTerm=%d LastLogIndex=%d\n",
+		args.Term, rf.me, server, args.LastLogTerm, args.LastLogIndex)
 	reply := RequestVoteReply{}
 	ok := rf.peers[server].Call("Raft.RequestVote", args, &reply)
 
@@ -210,7 +212,7 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 	defer rf.mu.Unlock()
 
 	if !ok || rf.CurrentTerm != args.Term ||
-		rf.currentState != Candidate {
+		rf.currentState != Candidate || !rf.isRunning {
 		return
 	}
 
@@ -235,6 +237,7 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 //
 func (rf *Raft) Kill() {
 	// Your code here, if desired.
+	rf.endCh <- struct{}{}
 }
 
 // notice!! not thread safe
@@ -254,6 +257,10 @@ func (rf *Raft) registerHandler() {
 	rf.addHandler(Follower, TimeoutEvent, startElection)
 	rf.addHandler(Candidate, TimeoutEvent, startElection)
 	rf.addHandler(Candidate, GetVoteEvent, receiveVote)
+
+	rf.addHandler(Leader, RaftEndEvent, endRaft)
+	rf.addHandler(Follower, RaftEndEvent, endRaft)
+	rf.addHandler(Candidate, RaftEndEvent, endRaft)
 }
 
 func (rf *Raft) startRaft() {
@@ -265,6 +272,10 @@ func (rf *Raft) startRaft() {
 
 		case sendTerm := <-rf.getVoteCh:
 			rf.callHandler(GetVoteEvent, sendTerm)
+
+		case <-rf.endCh:
+			rf.callHandler(RaftEndEvent)
+			return
 		}
 	}
 }
@@ -306,7 +317,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rand.Seed(time.Now().UnixNano())
 	timeout := rand.Int()%(MaxTimeout-MinTimeout) + MinTimeout
 	rf.electionTimer = time.NewTimer(time.Duration(timeout) * time.Millisecond)
-
+	rf.isRunning = true
+	rf.endCh = make(chan interface{}, 10)
+	DPrintf("peer(%d) startup at timeMillisecond %d\n",
+		rf.me, time.Now().UnixNano()/1e6)
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 	go rf.startRaft()
