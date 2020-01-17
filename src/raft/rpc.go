@@ -140,6 +140,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.VotedFor = -1
 		rf.voteNum = 0
 		rf.currentState = Follower
+		rf.resetTimer()
 	}
 
 	if (rf.VotedFor == -1 || rf.VotedFor == args.CandidateId) &&

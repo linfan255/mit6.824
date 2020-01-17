@@ -9,16 +9,18 @@ import (
 const Debug = 0
 
 // for debug
-/*
 func (rf *Raft) PrintLogStatus() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
 	if rf.currentState == Leader {
-		fmt.Printf(" *ci:%d* ", rf.commitIndex)
-	} else {
-		fmt.Printf(" -ci:%d- ", rf.commitIndex)
+		fmt.Printf(" [%d]l-ci:%d lenLog:%d ", rf.CurrentTerm, rf.commitIndex, len(rf.Log))
+	} else if rf.currentState == Candidate {
+		fmt.Printf(" [%d]c-ci:%d lenLog:%d ", rf.CurrentTerm, rf.commitIndex, len(rf.Log))
+	} else if rf.currentState == Follower {
+		fmt.Printf(" [%d]f-ci:%d lenLog:%d ", rf.CurrentTerm, rf.commitIndex, len(rf.Log))
 	}
+	fmt.Printf("| ")
 	for _, v := range rf.Log {
 		if v.Command == nil {
 			fmt.Printf("%d:-- ", v.Term)
@@ -26,21 +28,20 @@ func (rf *Raft) PrintLogStatus() {
 			fmt.Printf("%d:%d ", v.Term, v.Command)
 		}
 	}
-	fmt.Printf(" | ")
-	for i, v := range rf.nextIndex {
-		fmt.Printf("%d:%d ", i, v)
-	}
 	fmt.Println()
 }
-*/
+
+/*
 func (rf *Raft) PrintLogStatus() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
 	if rf.currentState == Leader {
-		fmt.Printf(" *ci:%d lenLog:%d ", rf.commitIndex, len(rf.Log))
-	} else {
-		fmt.Printf(" -ci:%d lenLog:%d ", rf.commitIndex, len(rf.Log))
+		fmt.Printf(" [%d]l-ci:%d lenLog:%d ", rf.CurrentTerm, rf.commitIndex, len(rf.Log))
+	} else if rf.currentState == Candidate {
+		fmt.Printf(" [%d]c-ci:%d lenLog:%d ", rf.CurrentTerm, rf.commitIndex, len(rf.Log))
+	} else if rf.currentState == Follower {
+		fmt.Printf(" [%d]f-ci:%d lenLog:%d ", rf.CurrentTerm, rf.commitIndex, len(rf.Log))
 	}
 	fmt.Printf("| ")
 	for i, v := range rf.nextIndex {
@@ -48,6 +49,7 @@ func (rf *Raft) PrintLogStatus() {
 	}
 	fmt.Println()
 }
+*/
 
 func (rf *Raft) PrintLogStatusWithoutLock() {
 	for _, v := range rf.Log {

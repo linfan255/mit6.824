@@ -42,8 +42,8 @@ type ApplyMsg struct {
 }
 
 const (
-	MinTimeout int = 1000
-	MaxTimeout int = 2000
+	MinTimeout int = 800
+	MaxTimeout int = 1000
 
 	RetryIntervalMs  int = 10
 	SendHbIntervalMs int = 100
@@ -113,8 +113,13 @@ func (rf *Raft) trySendAppendEntries(server int) {
 func (rf *Raft) sendHeartbeat(sendTerm int) {
 	duration := time.Duration(SendHbIntervalMs)
 	for {
-		term, isleader := rf.GetState()
-		if !rf.isRunning || !isleader || sendTerm != term {
+		rf.mu.Lock()
+		term := rf.CurrentTerm
+		isleader := rf.currentState == Leader
+		isRunning := rf.isRunning
+		rf.mu.Unlock()
+
+		if !isRunning || !isleader || sendTerm != term {
 			return
 		}
 		for i, _ := range rf.peers {
@@ -173,10 +178,11 @@ func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
 			return true
 		} else {
 			if reply.Term > rf.CurrentTerm {
-				rf.CurrentTerm = reply.Term
 				rf.currentState = Follower
+				rf.CurrentTerm = reply.Term
 				rf.VotedFor = -1
 				rf.voteNum = 0
+				rf.resetTimer()
 				rf.persist()
 			} else {
 				// meet conflict
@@ -220,10 +226,11 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 		rf.getVoteCh <- args.Term
 	} else {
 		if reply.Term > rf.CurrentTerm {
-			rf.CurrentTerm = reply.Term
 			rf.currentState = Follower
+			rf.CurrentTerm = reply.Term
 			rf.VotedFor = -1
 			rf.voteNum = 0
+			rf.resetTimer()
 			rf.persist()
 		}
 	}
@@ -236,7 +243,6 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 // turn off debug output from this instance.
 //
 func (rf *Raft) Kill() {
-	// Your code here, if desired.
 	rf.endCh <- struct{}{}
 }
 
