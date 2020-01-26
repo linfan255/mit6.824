@@ -64,6 +64,7 @@ type Raft struct {
 	electionTimer *time.Timer
 	isRunning     bool
 	endCh         chan interface{}
+	notifyApplyCh chan interface{}
 }
 
 func (rf *Raft) addHandler(state RaftState, event RaftEvent, handler RaftHandler) bool {
@@ -81,7 +82,6 @@ func (rf *Raft) addHandler(state RaftState, event RaftEvent, handler RaftHandler
 func (rf *Raft) callHandler(event RaftEvent, args ...interface{}) bool {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-
 	if handler, ok := rf.handlers[rf.currentState][event]; ok {
 		if !handler(rf, args...) {
 			log.Printf("state(%d) handle event(%d) failed\n",
@@ -97,7 +97,7 @@ func (rf *Raft) callHandler(event RaftEvent, args ...interface{}) bool {
 // some rules for event handler:
 // 1) return bool. true denotes success
 // 2) first argument must be " rf *Raft "
-// 3) do not lock!! or call a function with rf.mu.Lock inside
+// 3) if handler is called by 'callHandler',do not lock!! or call a function with rf.mu.Lock inside
 // 4) do not use "for {...}", use it in goroutine if it is needed
 // 5) not get blocked inside handler
 ///////////////////////////////////////////////////////////////////
@@ -105,6 +105,8 @@ func (rf *Raft) callHandler(event RaftEvent, args ...interface{}) bool {
 func endRaft(rf *Raft, args ...interface{}) bool {
 	rf.isRunning = false
 	rf.electionTimer.Stop()
+	close(rf.getVoteCh)
+	close(rf.notifyApplyCh)
 	return true
 }
 
@@ -112,9 +114,6 @@ func startElection(rf *Raft, args ...interface{}) bool {
 	if rf.currentState == Leader || !rf.isRunning {
 		return true
 	}
-
-	DPrintf("[term %d] peer(%d) detect timeout at %d\n",
-		rf.CurrentTerm, rf.me, time.Now().UnixNano()/1e6)
 
 	rf.currentState = Candidate
 	rf.VotedFor = rf.me
@@ -156,8 +155,6 @@ func receiveVote(rf *Raft, args ...interface{}) bool {
 
 	rf.voteNum++
 	if rf.voteNum > len(rf.peers)/2 {
-		DPrintf("[term %d] peer(%d) receive %d vote, become leader\n",
-			rf.CurrentTerm, rf.me, rf.voteNum)
 		rf.currentState = Leader
 		rf.initLeader()
 		go rf.sendHeartbeat(rf.CurrentTerm)

@@ -34,14 +34,17 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 
 	reply.Term = rf.CurrentTerm
+	// check1: request with expire term
 	if rf.CurrentTerm > args.Term {
 		reply.Success = false
 		reply.ConflictTerm = -1
 		reply.ConflictIndex = -1
 		return
 	}
+
 	rf.resetTimer()
 
+	// check2: conflict previous entry
 	if len(rf.Log) <= args.PrevLogIndex {
 		reply.ConflictIndex = len(rf.Log)
 		reply.ConflictTerm = -1
@@ -90,7 +93,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 	newCommitIndex := Min(args.LeaderCommit, args.PrevLogIndex+len(args.Entries))
 	rf.commitIndex = Max(rf.commitIndex, newCommitIndex)
-	rf.applyLog()
+	rf.notifyApplyCh <- struct{}{}
 	rf.persist()
 
 	reply.Success = true
@@ -130,8 +133,13 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	lastLogIndex := len(rf.Log) - 1
 	lastLogTerm := rf.Log[lastLogIndex].Term
 
-	reply.Term = rf.CurrentTerm
+	if args.Term == rf.CurrentTerm && rf.VotedFor == args.CandidateId {
+		reply.Term = rf.CurrentTerm
+		reply.VoteGranted = true
+		return
+	}
 	if args.Term < rf.CurrentTerm {
+		reply.Term = rf.CurrentTerm
 		reply.VoteGranted = false
 		return
 	}
@@ -139,20 +147,20 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.CurrentTerm = args.Term
 		rf.VotedFor = -1
 		rf.voteNum = 0
-		rf.currentState = Follower
-		rf.resetTimer()
+		if rf.currentState != Follower {
+			rf.currentState = Follower
+			rf.resetTimer()
+		}
 	}
 
-	if (rf.VotedFor == -1 || rf.VotedFor == args.CandidateId) &&
+	if rf.VotedFor == -1 &&
 		isMoreUpToDate(args.LastLogTerm, args.LastLogIndex, lastLogTerm, lastLogIndex) {
-		DPrintf("[term %d] peer(%d) grant vote to %d\n",
-			rf.CurrentTerm, rf.me, args.CandidateId)
+		reply.Term = rf.CurrentTerm
 		reply.VoteGranted = true
 		rf.VotedFor = args.CandidateId
 		rf.resetTimer()
 	} else {
-		DPrintf("[term %d] peer(%d) rf.VotedFor=%d args.Candidate=%d args.LastLogTerm=%d args.LastLogIndex=%d lastLogTerm=%d lastLogIndex=%d\n",
-			rf.CurrentTerm, rf.me, rf.VotedFor, args.CandidateId, args.LastLogTerm, args.LastLogIndex, lastLogTerm, lastLogIndex)
+		reply.Term = rf.CurrentTerm
 		reply.VoteGranted = false
 	}
 	rf.persist()

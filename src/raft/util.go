@@ -6,10 +6,17 @@ import (
 )
 
 // Debugging
-const Debug = 0
+// -2 : close all debug log
+// -1 : open PrintLog
+// >= 0: open all log
+const Debug = -1
 
 // for debug
 func (rf *Raft) PrintLogStatus() {
+	if Debug < -1 {
+		return
+	}
+
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
@@ -28,11 +35,18 @@ func (rf *Raft) PrintLogStatus() {
 			fmt.Printf("%d:%d ", v.Term, v.Command)
 		}
 	}
-	fmt.Println()
+	fmt.Printf("| ")
+	for i, v := range rf.nextIndex {
+		fmt.Printf("%d:%d ", i, v)
+	}
+	fmt.Printf("\n")
 }
 
 /*
 func (rf *Raft) PrintLogStatus() {
+	if Debug < -1 {
+		return
+	}
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
@@ -43,11 +57,28 @@ func (rf *Raft) PrintLogStatus() {
 	} else if rf.currentState == Follower {
 		fmt.Printf(" [%d]f-ci:%d lenLog:%d ", rf.CurrentTerm, rf.commitIndex, len(rf.Log))
 	}
+
+	term, cnt := -1, 0
+	for _, v := range rf.Log {
+		if v.Command != nil {
+			if v.Term != term {
+				if term != -1 {
+					fmt.Printf("%d:%d ", term, cnt)
+				}
+				term = v.Term
+				cnt = 1
+			} else if v.Term == term {
+				cnt++
+			}
+		}
+	}
+	fmt.Printf("%d:%d ", term, cnt)
+
 	fmt.Printf("| ")
 	for i, v := range rf.nextIndex {
 		fmt.Printf("%d:%d ", i, v)
 	}
-	fmt.Println()
+	fmt.Printf("\n")
 }
 */
 

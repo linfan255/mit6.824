@@ -42,8 +42,8 @@ type ApplyMsg struct {
 }
 
 const (
-	MinTimeout int = 800
-	MaxTimeout int = 1000
+	MinTimeout int = 1000
+	MaxTimeout int = 2000 // 300-700
 
 	RetryIntervalMs  int = 10
 	SendHbIntervalMs int = 100
@@ -156,14 +156,20 @@ func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
 	}
 	rf.mu.Unlock()
 
+	DPrintf("[term %d] peer(%d) send AppendEntries to %d, ci(%d), prevLogIndex(%d) len(Entries)(%d)\n",
+		rf.CurrentTerm, rf.me, server, args.LeaderCommit, args.PrevLogIndex, len(args.Entries))
+
 	reply := AppendEntriesReply{}
 	ok := rf.peers[server].Call("Raft.AppendEntries", &args, &reply)
 
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	if rf.CurrentTerm != args.Term || !rf.isRunning {
+	if !rf.isRunning {
 		return true
+	}
+	if rf.CurrentTerm != args.Term {
+		return false
 	}
 
 	if ok {
@@ -178,11 +184,13 @@ func (rf *Raft) sendAppendEntries(server int, isHeartbeat bool) bool {
 			return true
 		} else {
 			if reply.Term > rf.CurrentTerm {
-				rf.currentState = Follower
+				if rf.currentState != Follower {
+					rf.currentState = Follower
+					rf.resetTimer()
+				}
 				rf.CurrentTerm = reply.Term
 				rf.VotedFor = -1
 				rf.voteNum = 0
-				rf.resetTimer()
 				rf.persist()
 			} else {
 				// meet conflict
@@ -209,31 +217,31 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 		return
 	}
 
-	DPrintf("[term %d] peer(%d) sendRequestVote to %d LastLogTerm=%d LastLogIndex=%d\n",
-		args.Term, rf.me, server, args.LastLogTerm, args.LastLogIndex)
 	reply := RequestVoteReply{}
 	ok := rf.peers[server].Call("Raft.RequestVote", args, &reply)
 
 	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
 	if !ok || rf.CurrentTerm != args.Term ||
 		rf.currentState != Candidate || !rf.isRunning {
+		rf.mu.Unlock()
 		return
 	}
-
-	if reply.VoteGranted {
-		rf.getVoteCh <- args.Term
-	} else {
+	if !reply.VoteGranted {
 		if reply.Term > rf.CurrentTerm {
-			rf.currentState = Follower
+			if rf.currentState != Follower {
+				rf.currentState = Follower
+				rf.resetTimer()
+			}
 			rf.CurrentTerm = reply.Term
 			rf.VotedFor = -1
 			rf.voteNum = 0
-			rf.resetTimer()
 			rf.persist()
 		}
+		rf.mu.Unlock()
+		return
 	}
+	rf.mu.Unlock()
+	rf.getVoteCh <- args.Term
 }
 
 //
@@ -243,7 +251,7 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs) {
 // turn off debug output from this instance.
 //
 func (rf *Raft) Kill() {
-	rf.endCh <- struct{}{}
+	close(rf.endCh)
 }
 
 // notice!! not thread safe
@@ -269,8 +277,36 @@ func (rf *Raft) registerHandler() {
 	rf.addHandler(Candidate, RaftEndEvent, endRaft)
 }
 
+// note: apply command should be done in a single goroutine
+func (rf *Raft) listenApply() {
+	for {
+		select {
+		case <-rf.endCh:
+			return
+
+		case <-rf.notifyApplyCh:
+			var msgSlice []ApplyMsg
+			rf.mu.Lock()
+			for rf.commitIndex > rf.lastApplied &&
+				rf.lastApplied < len(rf.Log)-1 {
+				var applyMsg ApplyMsg
+				applyMsg.CommandValid = true
+				applyMsg.Command = rf.Log[rf.lastApplied+1].Command
+				applyMsg.CommandIndex = rf.lastApplied + 1
+				rf.lastApplied++
+				msgSlice = append(msgSlice, applyMsg)
+			}
+			rf.mu.Unlock()
+			for _, msg := range msgSlice {
+				rf.applyCh <- msg
+			}
+		}
+	}
+}
+
 func (rf *Raft) startRaft() {
 	rf.registerHandler()
+	go rf.listenApply()
 	for {
 		select {
 		case <-rf.electionTimer.C:
@@ -316,7 +352,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.applyCh = applyCh
 
 	rf.currentState = Follower
-	rf.getVoteCh = make(chan int, 3000)
+	rf.getVoteCh = make(chan int, 500)
+	rf.notifyApplyCh = make(chan interface{}, 500)
 	rf.handlers = make(map[RaftState]map[RaftEvent]RaftHandler)
 	rf.voteNum = 0
 
@@ -325,8 +362,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.electionTimer = time.NewTimer(time.Duration(timeout) * time.Millisecond)
 	rf.isRunning = true
 	rf.endCh = make(chan interface{}, 10)
-	DPrintf("peer(%d) startup at timeMillisecond %d\n",
-		rf.me, time.Now().UnixNano()/1e6)
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 	go rf.startRaft()

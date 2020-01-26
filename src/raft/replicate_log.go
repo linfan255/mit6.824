@@ -61,7 +61,7 @@ func (rf *Raft) updateCommitIndex() {
 		}
 	}
 	if rf.commitIndex > rf.lastApplied {
-		rf.applyLog()
+		rf.notifyApplyCh <- struct{}{}
 	}
 }
 
